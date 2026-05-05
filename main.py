@@ -23,9 +23,9 @@ import os
 
 bot = Client(
     "bot",
-    api_id=api_id,
-    api_hash=api_hash,
-    bot_token=bot_token)
+    API_HASH=API_HASH,
+    API_HASH=API_HASH,
+    BOT_TOKEN=BOT_TOKEN)
 
 @bot.on_message(filters.command(["stop"]))
 async def cancel_command(bot: Client, m: Message):
