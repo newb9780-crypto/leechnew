@@ -20,10 +20,12 @@ from config import api_id, api_hash, bot_token, auth_users, sudo_users
 import sys
 import re
 import os
+from flask import Flask
+import threading
 
 # Purani session file delete karo (FIX)
-if os.path.exists("bot.session"):
-    os.remove("bot.session")
+if os.path.exists("my_bot_session.session"):
+    os.remove("my_bot_session.session")
     print("Old session file deleted!")
 
 # Session name change karo (FIX)
@@ -230,11 +232,17 @@ async def account_login(bot: Client, m: Message):
                         continue
                 else:
                     prog = await m.reply_text(f"**Downloading:-**\n\n** Video Name :-** `{name}\nQuality - {raw_text2}`\n**link:**`{url}`**")
-                    res_file = await helper.download_video(url, name, raw_text2)
-                    filename = res_file
-                    await prog.delete(True)
-                    await helper.send_vid(bot, m, cc, filename, thumb, name)
-                    count += 1
+                    try:
+                        res_file = await helper.download_video(url, name, raw_text2)
+                        if res_file is None or not os.path.exists(res_file):
+                            raise Exception("Download failed - No file returned")
+                        filename = res_file
+                        await prog.delete(True)
+                        await helper.send_vid(bot, m, cc, filename, thumb, name)
+                        count += 1
+                    except Exception as e:
+                        await prog.delete(True)
+                        raise Exception(f"Download error: {str(e)}")
 
             except Exception as e:
                 await m.reply_text(f"**This #Failed File is not Counted**\n**Name** =>> `{name}`\n**Link** =>> `{url}`\n\n ** fail reason »** {e}")
@@ -246,4 +254,20 @@ async def account_login(bot: Client, m: Message):
     await m.reply_text("🔰Done Boss🔰")
 
 
+# =============================================
+# DUMMY WEB SERVER FOR RENDER WEB SERVICE
+# =============================================
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
+
+# Flask ko background thread mein chalao
+threading.Thread(target=run_flask, daemon=True).start()
+
+# Bot run karo
 bot.run()
