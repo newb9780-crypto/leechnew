@@ -21,8 +21,14 @@ import sys
 import re
 import os
 
+# Purani session file delete karo (FIX)
+if os.path.exists("bot.session"):
+    os.remove("bot.session")
+    print("Old session file deleted!")
+
+# Session name change karo (FIX)
 bot = Client(
-    "bot",
+    "my_bot_session",
     api_id=api_id,
     api_hash=api_hash,
     bot_token=bot_token)
