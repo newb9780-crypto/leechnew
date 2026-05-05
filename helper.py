@@ -5,6 +5,7 @@ import asyncio
 import os
 import requests
 import time
+import json
 from p_bar import progress_bar
 import aiohttp
 import tgcrypto
@@ -123,40 +124,60 @@ async def download_video(url, name, raw_text2):
     try:
         output_file = f"{name}.mp4"
         
+        # 🔥 FIX: Try multiple formats and fallbacks
         command = [
                 "yt-dlp",
                 "-k", 
                 "--allow-unplayable-formats", 
                 "--geo-bypass",
-                "--cookies", "cookies.txt",
-                "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
-                "-S", f"res~{raw_text2},+size,+br",
+                "--no-check-certificates",
+                "--user-agent", "Mozilla/5.0 (Linux; Android 12; RMX2121) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36",
+                "-f", "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b/best",
+                "-S", f"res:{raw_text2},+size,+br",
                 "--fixup", "never",
                 url,
                 "--external-downloader", "aria2c",
                 "--external-downloader-args", "-x 16 -s 16 -k 1M", 
                 "--output", output_file,
                 "--merge-output-format", "mp4",
+                "--retries", "10",
+                "--fragment-retries", "10",
         ]
-            
-        result = subprocess.run(command, check=True, text=True, stderr=subprocess.PIPE)
         
-        if result.returncode == 0:
-            print(f"Successfully downloaded: {output_file}")
-                                
-            if os.path.isfile(output_file):
-                return output_file
-
+        # 🔥 FIX: Check if cookies file exists
+        if os.path.exists("cookies.txt"):
+            command.insert(command.index("--geo-bypass") + 1, "--cookies")
+            command.insert(command.index("--geo-bypass") + 2, "cookies.txt")
+            
+        result = subprocess.run(command, check=False, text=True, capture_output=True)
+        
+        if os.path.isfile(output_file) and os.path.getsize(output_file) > 0:
+            print(f"✅ Successfully downloaded: {output_file}")
+            return output_file
         else:
-            print(f"yt-dlp command failed: {result.stderr.strip()}")
-            return None, f"yt-dlp command failed: {result.stderr.strip()}"
+            # 🔥 FIX: Try without external downloader (fallback)
+            print("⚠️ First attempt failed, trying without aria2c...")
+            command.remove("--external-downloader")
+            command.remove("aria2c")
+            command.remove("--external-downloader-args")
+            command.remove("-x 16 -s 16 -k 1M")
+            
+            result2 = subprocess.run(command, check=False, text=True, capture_output=True)
+            
+            if os.path.isfile(output_file) and os.path.getsize(output_file) > 0:
+                print(f"✅ Successfully downloaded (fallback): {output_file}")
+                return output_file
+            else:
+                error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                print(f"❌ Download failed: {error_msg}")
+                return None
 
     except FileNotFoundError as exc:
         print(f"File not found: {exc}")
-        return None, f"File not found: {exc}"
-    except subprocess.CalledProcessError as e:
-        print(f"An error occurred: {e.stderr.strip()}")
-        return None, f"An error occurred: {e.stderr.strip()}"
+        return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
         
 async def send_vid(bot: Client, m: Message, cc, filename, thumb, name):
 
@@ -175,9 +196,12 @@ async def send_vid(bot: Client, m: Message, cc, filename, thumb, name):
         await m.reply_video(filename, caption=cc, supports_streaming=True, height=720, width=1280, thumb=thumbnail, duration=duration, progress=progress_bar, progress_args=(reply, start_time))
                 
     except Exception as e:
-        await print(str(e))
+        print(str(e))
                 
-    os.remove(filename)
-    os.remove(thumbnail)
+    # 🔥 FIX: Only remove if exists
+    if os.path.exists(filename):
+        os.remove(filename)
+    if thumbnail and os.path.exists(thumbnail):
+        os.remove(thumbnail)
     
     await reply.delete(True)
